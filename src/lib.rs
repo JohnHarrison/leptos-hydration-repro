@@ -57,7 +57,13 @@ fn Page() -> impl IntoView {
             <Suspense fallback=|| ()>
                 {move || detail.get().map(|name| view! {
                     <h2>{name.clone()}</h2>
-                    <Inner/>
+                    // `Inner` consumes the resolved outer value (`name`), mirroring
+                    // the real app: the tab subtree needs the resolved team detail.
+                    // The suggested fix — hoist `Inner` to a static sibling outside
+                    // this closure — is therefore structurally impossible: `name`
+                    // only exists inside `detail.get().map(...)`. So `Inner` MUST be
+                    // created here, inside the reactive closure, and it still panics.
+                    <Inner team_name=name.clone() />
                 })}
             </Suspense>
         </div>
@@ -65,11 +71,12 @@ fn Page() -> impl IntoView {
 }
 
 #[component]
-fn Inner() -> impl IntoView {
+fn Inner(team_name: String) -> impl IntoView {
     // A SECOND blocking resource, created inside the Suspense-rendered child —
-    // exactly how the real page creates its groups list.
+    // exactly how the real page creates its groups list. It depends on the
+    // resolved outer value, which is why this component can't be hoisted out.
     let groups_once = OnceResource::new_blocking(async move {
-        vec!["Group 1".to_string()]
+        vec![format!("{team_name} Group 1")]
     });
     view! {
         {move || {
